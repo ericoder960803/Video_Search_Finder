@@ -18,20 +18,13 @@ public:
         rocksdb::Options options;
         options.create_if_missing = true;
         
-        rocksdb::DB* raw_db = nullptr;
-        rocksdb::Status status = rocksdb::DB::Open(options, db_path, &raw_db);
+        // 現代 RocksDB 優先使用 unique_ptr 版本
+        rocksdb::Status status = rocksdb::DB::Open(options, db_path, &db_ptr);
         
-        if (status.ok()) {
-            db_ptr.reset(raw_db);
-            std::cout << "[Cache] ⚡ RocksDB 快取引擎已啟動" << std::endl;
+        if (!status.ok()) {
+            std::cerr << "[Cache] ⚠️ RocksDB 打開失敗，將以降級模式執行: " << status.ToString() << std::endl;
         } else {
-            // 某些版本可能需要傳入 unique_ptr 的位址
-            status = rocksdb::DB::Open(options, db_path, &db_ptr);
-            if (!status.ok()) {
-                std::cerr << "[Cache] ⚠️ RocksDB 打開失敗，將以降級模式執行: " << status.ToString() << std::endl;
-            } else {
-                std::cout << "[Cache] ⚡ RocksDB 快取引擎已啟動" << std::endl;
-            }
+            std::cout << "[Cache] ⚡ RocksDB 快取引擎已啟動" << std::endl;
         }
     }
 

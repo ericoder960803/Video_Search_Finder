@@ -50,15 +50,24 @@ jobs:
       - name: install dependencies (windows only)
         if: matrix.platform == 'windows-latest'
         run: |
-          choco install ffmpeg
-          # Note: RocksDB on Windows is tricky, core_src CMake handles its absence
+          # 使用 vcpkg 安裝 ffmpeg 比較能讓 CMake 找到
+          vcpkg install ffmpeg:x64-windows
+          # 將 vcpkg 加入路徑
+          echo "CMAKE_PREFIX_PATH=C:/vcpkg/installed/x64-windows" >> $GITHUB_ENV
 
       - name: Build Core Engine
         shell: bash
         run: |
           cd core_src
           mkdir build && cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release
+          
+          # Windows 需要指定 vcpkg 工具鏈
+          if [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
+            cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake
+          else
+            cmake .. -DCMAKE_BUILD_TYPE=Release
+          fi
+          
           cmake --build . --config Release
           
           # Prepare Sidecar directory
@@ -68,10 +77,7 @@ jobs:
           if [[ "${{ matrix.platform }}" == "windows-latest" ]]; then
             cp Release/dupe_engine.exe ../../gui/src-tauri/bin/dupe_engine-x86_64-pc-windows-msvc.exe
           elif [[ "${{ matrix.platform }}" == "macos-latest" ]]; then
-            # For Mac, we might need to handle universal or specific arch
             cp dupe_engine ../../gui/src-tauri/bin/dupe_engine-x86_64-apple-darwin
-            # If you want Apple Silicon support, you'd need to compile for it too
-            # cp dupe_engine-arm ../../gui/src-tauri/bin/dupe_engine-aarch64-apple-darwin
           else
             cp dupe_engine ../../gui/src-tauri/bin/dupe_engine-x86_64-unknown-linux-gnu
           fi
