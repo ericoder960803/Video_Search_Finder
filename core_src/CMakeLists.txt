@@ -6,18 +6,21 @@ set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 # 2. 尋找 FFmpeg
-# 先嘗試用 PkgConfig (Linux/Mac 常用)
 find_package(PkgConfig QUIET)
 if(PKG_CONFIG_FOUND)
-    pkg_check_modules(AVCODEC REQUIRED libavcodec)
-    pkg_check_modules(AVFORMAT REQUIRED libavformat)
-    pkg_check_modules(AVUTIL REQUIRED libavutil)
-    pkg_check_modules(SWSCALE REQUIRED libswscale)
+    # 使用 IMPORTED_TARGET 是現代 CMake 最穩的做法
+    pkg_check_modules(AVCODEC REQUIRED IMPORTED_TARGET libavcodec)
+    pkg_check_modules(AVFORMAT REQUIRED IMPORTED_TARGET libavformat)
+    pkg_check_modules(AVUTIL REQUIRED IMPORTED_TARGET libavutil)
+    pkg_check_modules(SWSCALE REQUIRED IMPORTED_TARGET libswscale)
     
-    set(FFMPEG_INCLUDE_DIRS ${AVCODEC_INCLUDE_DIRS} ${AVFORMAT_INCLUDE_DIRS} ${AVUTIL_INCLUDE_DIRS} ${SWSCALE_INCLUDE_DIRS})
-    set(FFMPEG_LIBRARIES ${AVCODEC_LIBRARIES} ${AVFORMAT_LIBRARIES} ${AVUTIL_LIBRARIES} ${SWSCALE_LIBRARIES})
+    set(FFMPEG_TARGETS 
+        PkgConfig::AVCODEC 
+        PkgConfig::AVFORMAT 
+        PkgConfig::AVUTIL 
+        PkgConfig::SWSCALE
+    )
 else()
-    # Windows 或 PkgConfig 失敗時的備案
     message(STATUS "PkgConfig not found, trying manual FFmpeg search")
     find_path(AVCODEC_INCLUDE_DIR libavcodec/avcodec.h)
     find_library(AVCODEC_LIBRARY avcodec)
@@ -38,17 +41,18 @@ add_executable(dupe_engine
     include/xxhash.c
 )
 
-# 4. 指定標頭檔路徑
+# 4. 指定標頭檔與連結庫
 target_include_directories(dupe_engine PRIVATE 
     ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/src
-    ${FFMPEG_INCLUDE_DIRS}
 )
 
-# 5. 連結動態庫
-target_link_libraries(dupe_engine PRIVATE 
-    ${FFMPEG_LIBRARIES}
-)
+if(FFMPEG_TARGETS)
+    target_link_libraries(dupe_engine PRIVATE ${FFMPEG_TARGETS})
+else()
+    target_include_directories(dupe_engine PRIVATE ${FFMPEG_INCLUDE_DIRS})
+    target_link_libraries(dupe_engine PRIVATE ${FFMPEG_LIBRARIES})
+endif()
 
 if(NOT MSVC)
     target_link_libraries(dupe_engine PRIVATE pthread m)
