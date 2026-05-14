@@ -1,0 +1,46 @@
+# IDEs and OS files
+.DS_Store
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# C++ Build Artifacts
+**/CMakeCache.txt
+**/CMakeFiles/
+**/cmake_install.cmake
+**/Makefile
+**/Makefile2
+**/cmake-build-*/
+**/build/
+**/*.o
+**/*.obj
+**/*.d
+**/*.a
+**/*.lib
+**/*.so
+**/*.dylib
+**/*.exe
+**/*.out
+**/dupe_engine
+
+# Node.js
+**/node_modules/
+**/dist/
+**/.npm
+**/npm-debug.log*
+**/yarn-debug.log*
+**/yarn-error.log*
+
+# Rust
+**/target/
+**/*.rs.bk
+Cargo.lock
+
+# Tauri
+**/src-tauri/target/
+
+# App Specific
+/test_videos/
+/test_videos/stress/
+/core/dupe_engine

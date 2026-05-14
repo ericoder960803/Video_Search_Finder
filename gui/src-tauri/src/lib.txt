@@ -1,0 +1,98 @@
+use tauri::{Emitter, Window};
+use std::process::{Command, Stdio};
+use std::io::{BufRead, BufReader};
+use std::thread;
+use std::path::PathBuf;
+
+#[tauri::command]
+fn run_dupe_engine(window: Window, paths: Vec<String>) {
+    // 取得當前工作目錄
+    let current_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
+    
+    // 定義可能的相對路徑
+    let possible_locations = vec![
+        "../../dupe_engine", // 開發模式下從 src-tauri 往上兩層
+        "../dupe_engine",    // 從 gui_src 往上一層
+        "./dupe_engine",     // 當前目錄
+    ];
+
+    let mut exe_path = None;
+    for loc in possible_locations {
+        let p = current_dir.join(loc);
+        if p.exists() {
+            exe_path = Some(p);
+            break;
+        }
+    }
+
+    let exe = match exe_path {
+        Some(p) => p,
+        None => {
+            let msg = format!("[Error] 找不到執行檔。工作目錄: {:?}\n請確保已在根目錄執行 make", current_dir);
+            let _ = window.emit("scan-log", msg);
+            return;
+        }
+    };
+
+    let exe_display = format!("{:?}", exe);
+    let _ = window.emit("scan-log", format!("[GUI] 嘗試啟動引擎: {}", exe_display));
+
+    thread::spawn(move || {
+        let mut child = match Command::new(&exe)
+            .args(&paths)
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn() 
+        {
+            Ok(c) => c,
+            Err(e) => {
+                let _ = window.emit("scan-log", format!("[Error] 無法啟動二進位檔: {}", e));
+                return;
+            }
+        };
+
+        let stdout = child.stdout.take().expect("Failed to open stdout");
+        let stderr = child.stderr.take().expect("Failed to open stderr");
+
+        let window_clone = window.clone();
+        let stdout_thread = thread::spawn(move || {
+            let reader = BufReader::new(stdout);
+            for line in reader.split(b'\n') {
+                if let Ok(l) = line {
+                    let text = String::from_utf8_lossy(&l).trim().to_string();
+                    if !text.is_empty() {
+                        let _ = window_clone.emit("scan-log", text);
+                    }
+                }
+            }
+        });
+
+        let window_clone2 = window.clone();
+        let stderr_thread = thread::spawn(move || {
+            let reader = BufReader::new(stderr);
+            for line in reader.split(b'\n') {
+                if let Ok(l) = line {
+                    let text = String::from_utf8_lossy(&l).trim().to_string();
+                    if !text.is_empty() {
+                        let _ = window_clone2.emit("scan-log", format!("[Error] {}", text));
+                    }
+                }
+            }
+        });
+
+        let _ = stdout_thread.join();
+        let _ = stderr_thread.join();
+        let _ = child.wait();
+        let _ = window.emit("scan-log", "[Main] ✅ 掃描任務完全結束。");
+    });
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_opener::init())
+        .invoke_handler(tauri::generate_handler![run_dupe_engine])
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}
