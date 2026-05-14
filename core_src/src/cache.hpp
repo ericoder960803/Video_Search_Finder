@@ -7,6 +7,7 @@
 #ifdef USE_ROCKSDB
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
+#include <rocksdb/version.h> // 包含版本資訊
 #include <memory>
 
 class VideoCache {
@@ -18,8 +19,20 @@ public:
         rocksdb::Options options;
         options.create_if_missing = true;
         
-        // 現代 RocksDB 優先使用 unique_ptr 版本
-        rocksdb::Status status = rocksdb::DB::Open(options, db_path, &db_ptr);
+        rocksdb::Status status;
+        
+        // 根據 RocksDB 版本使用不同的 Open 簽名
+#if defined(ROCKSDB_MAJOR) && (ROCKSDB_MAJOR >= 7 || (ROCKSDB_MAJOR == 6 && ROCKSDB_MINOR >= 20))
+        // 較新版本支援或強制要求 unique_ptr
+        status = rocksdb::DB::Open(options, db_path, &db_ptr);
+#else
+        // 較舊版本使用原始指標
+        rocksdb::DB* raw_db = nullptr;
+        status = rocksdb::DB::Open(options, db_path, &raw_db);
+        if (status.ok()) {
+            db_ptr.reset(raw_db);
+        }
+#endif
         
         if (!status.ok()) {
             std::cerr << "[Cache] ⚠️ RocksDB 打開失敗，將以降級模式執行: " << status.ToString() << std::endl;

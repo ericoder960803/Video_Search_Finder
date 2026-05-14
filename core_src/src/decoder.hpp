@@ -122,8 +122,13 @@ private:
             return res;
         }
 
+#if LIBAVCODEC_VERSION_INT < AV_VERSION_INT(59, 0, 0)
         AVCodec* decoder = nullptr;
-        int v_idx = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, (const AVCodec**)&decoder, 0);
+        int v_idx = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, &decoder, 0);
+#else
+        const AVCodec* decoder = nullptr;
+        int v_idx = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, &decoder, 0);
+#endif
         if (v_idx < 0) {
             avformat_close_input(&fmt_ctx);
             res.is_poison = true;
