@@ -7,29 +7,35 @@
 #ifdef USE_ROCKSDB
 #include <rocksdb/db.h>
 #include <rocksdb/options.h>
+#include <memory>
 
 class VideoCache {
 private:
-    rocksdb::DB* db = nullptr;
+    std::unique_ptr<rocksdb::DB> db_ptr;
 
 public:
     VideoCache(const std::string& db_path = "./.dupe_cache_rocksdb") {
         rocksdb::Options options;
         options.create_if_missing = true;
-        rocksdb::Status status = rocksdb::DB::Open(options, db_path, &db);
-        if (!status.ok()) {
-            std::cerr << "[Cache] ⚠️ RocksDB 打開失敗，將以降級模式執行: " << status.ToString() << std::endl;
-            db = nullptr;
-        } else {
+        
+        rocksdb::DB* raw_db = nullptr;
+        rocksdb::Status status = rocksdb::DB::Open(options, db_path, &raw_db);
+        
+        if (status.ok()) {
+            db_ptr.reset(raw_db);
             std::cout << "[Cache] ⚡ RocksDB 快取引擎已啟動" << std::endl;
+        } else {
+            // 某些版本可能需要傳入 unique_ptr 的位址
+            status = rocksdb::DB::Open(options, db_path, &db_ptr);
+            if (!status.ok()) {
+                std::cerr << "[Cache] ⚠️ RocksDB 打開失敗，將以降級模式執行: " << status.ToString() << std::endl;
+            } else {
+                std::cout << "[Cache] ⚡ RocksDB 快取引擎已啟動" << std::endl;
+            }
         }
     }
 
-    ~VideoCache() {
-        if (db) {
-            delete db;
-        }
-    }
+    ~VideoCache() = default;
 
     // 將路徑、大小、修改時間組成 Unique Key
     std::string build_key(const VideoTask& task) {
@@ -37,9 +43,9 @@ public:
     }
 
     bool get(const VideoTask& task, ResultTask& res) {
-        if (!db) return false;
+        if (!db_ptr) return false;
         std::string value;
-        rocksdb::Status s = db->Get(rocksdb::ReadOptions(), build_key(task), &value);
+        rocksdb::Status s = db_ptr->Get(rocksdb::ReadOptions(), build_key(task), &value);
         if (s.ok()) {
             try {
                 std::stringstream ss(value);
@@ -61,7 +67,7 @@ public:
     }
 
     void put(const VideoTask& task, const ResultTask& res) {
-        if (!db) return;
+        if (!db_ptr) return;
         std::string value = 
             std::to_string(res.hash) + "|" +
             std::to_string(res.filesize_mb) + "|" +
@@ -70,7 +76,7 @@ public:
             std::to_string(res.bitrate_kbps) + "|" +
             res.match_detail + "|" +
             (res.is_poison ? "1" : "0");
-        db->Put(rocksdb::WriteOptions(), build_key(task), value);
+        db_ptr->Put(rocksdb::WriteOptions(), build_key(task), value);
     }
 };
 

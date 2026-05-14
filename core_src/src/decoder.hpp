@@ -122,8 +122,8 @@ private:
             return res;
         }
 
-        const AVCodec* decoder = nullptr;
-        int v_idx = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, &decoder, 0);
+        AVCodec* decoder = nullptr;
+        int v_idx = av_find_best_stream(fmt_ctx, AVMEDIA_TYPE_VIDEO, -1, -1, (const AVCodec**)&decoder, 0);
         if (v_idx < 0) {
             avformat_close_input(&fmt_ctx);
             res.is_poison = true;
